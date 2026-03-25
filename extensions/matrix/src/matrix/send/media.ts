@@ -114,6 +114,7 @@ export async function prepareImageInfo(params: {
   buffer: Buffer;
   client: MatrixClient;
   encrypted?: boolean;
+  roomId?: string; // needed to encrypt thumbnails in E2EE rooms
 }): Promise<DimensionalFileInfo | undefined> {
   const meta = await getCore()
     .media.getImageMetadata(params.buffer)
@@ -123,7 +124,46 @@ export async function prepareImageInfo(params: {
   }
   const imageInfo: DimensionalFileInfo = { w: meta.width, h: meta.height };
   if (params.encrypted) {
-    // For E2EE media, avoid uploading plaintext thumbnails.
+    if (params.roomId) {
+      // E2EE room: encrypt the thumbnail rather than skipping it
+      const maxDim = Math.max(meta.width, meta.height);
+      if (maxDim > THUMBNAIL_MAX_SIDE) {
+        try {
+          const thumbBuffer = await getCore().media.resizeToJpeg({
+            buffer: params.buffer,
+            maxSide: THUMBNAIL_MAX_SIDE,
+            quality: THUMBNAIL_QUALITY,
+            withoutEnlargement: true,
+          });
+          const thumbMeta = await getCore()
+            .media.getImageMetadata(thumbBuffer)
+            .catch(() => null);
+          const isEncrypted =
+            params.client.crypto &&
+            (await params.client.crypto.isRoomEncrypted(params.roomId));
+          if (isEncrypted && params.client.crypto) {
+            // Encrypt the thumbnail for E2EE rooms — use thumbnail_file, not thumbnail_url
+            const encrypted = await params.client.crypto.encryptMedia(thumbBuffer);
+            const thumbUri = await params.client.uploadContent(
+              encrypted.buffer,
+              "image/jpeg",
+              "thumbnail.jpg",
+            );
+            imageInfo.thumbnail_file = { url: thumbUri, ...encrypted.file };
+          }
+          if (thumbMeta) {
+            imageInfo.thumbnail_info = {
+              w: thumbMeta.width,
+              h: thumbMeta.height,
+              mimetype: "image/jpeg",
+              size: thumbBuffer.byteLength,
+            };
+          }
+        } catch {
+          // Thumbnail generation failed, continue without it
+        }
+      }
+    }
     return imageInfo;
   }
   const maxDim = Math.max(meta.width, meta.height);

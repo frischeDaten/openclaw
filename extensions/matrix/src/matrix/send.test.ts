@@ -172,8 +172,8 @@ describe("sendMessageMatrix media", () => {
     expect(content.file?.url).toBe("mxc://example/file");
   });
 
-  it("does not upload plaintext thumbnails for encrypted image sends", async () => {
-    const { client, uploadContent } = makeEncryptedMediaClient();
+  it("encrypts thumbnails for E2EE image sends", async () => {
+    const { client, sendMessage, uploadContent } = makeEncryptedMediaClient();
     getImageMetadataMock
       .mockResolvedValueOnce({ width: 1600, height: 1200 })
       .mockResolvedValueOnce({ width: 800, height: 600 });
@@ -184,7 +184,18 @@ describe("sendMessageMatrix media", () => {
       mediaUrl: "file:///tmp/photo.png",
     });
 
-    expect(uploadContent).toHaveBeenCalledTimes(1);
+    expect(uploadContent).toHaveBeenCalledTimes(2);
+    const content = sendMessage.mock.calls[0]?.[1] as {
+      url?: string;
+      file?: { url?: string };
+      info?: { thumbnail_url?: string; thumbnail_file?: { url?: string } };
+    };
+    // Main media encrypted correctly
+    expect(content.url).toBeUndefined();
+    expect(content.file?.url).toBe("mxc://example/file");
+    // Thumbnail encrypted via thumbnail_file, not plaintext thumbnail_url
+    expect(content.info?.thumbnail_url).toBeUndefined();
+    expect(content.info?.thumbnail_file?.url).toBe("mxc://example/file");
   });
 
   it("keeps reply context on voice transcript follow-ups outside threads", async () => {

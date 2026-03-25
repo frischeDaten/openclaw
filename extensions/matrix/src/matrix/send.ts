@@ -136,6 +136,7 @@ export async function sendMessageMatrix(
               buffer: media.buffer,
               client,
               encrypted: Boolean(uploaded.file),
+              roomId,
             })
           : undefined;
         const [firstChunk, ...rest] = chunks;
