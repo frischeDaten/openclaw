@@ -52,6 +52,7 @@ export type FileWithThumbnailInfo = {
   size?: number;
   mimetype?: string;
   thumbnail_url?: string;
+  thumbnail_file?: EncryptedFile; // used in E2EE rooms instead of thumbnail_url
   thumbnail_info?: {
     w?: number;
     h?: number;
